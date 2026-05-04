@@ -1,0 +1,141 @@
+{
+  "match_id": 8797062308,
+  "source_url": "https://www.dotabuff.com/matches/8797062308",
+  "is_professional_match": false,
+  "teams": {
+    "radiant": {
+      "name": null,
+      "url": null
+    },
+    "dire": {
+      "name": null,
+      "url": null
+    }
+  },
+  "players": [
+    {
+      "side": "radiant",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Muerta",
+      "hero_slug": "muerta",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "radiant",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Lifestealer",
+      "hero_slug": "lifestealer",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "radiant",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Ursa",
+      "hero_slug": "ursa",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "radiant",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Omniknight",
+      "hero_slug": "omniknight",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "radiant",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Gyrocopter",
+      "hero_slug": "gyrocopter",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "dire",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Lina",
+      "hero_slug": "lina",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "dire",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Viper",
+      "hero_slug": "viper",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "dire",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Clockwerk",
+      "hero_slug": "clockwerk",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "dire",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Bounty Hunter",
+      "hero_slug": "bounty-hunter",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    },
+    {
+      "side": "dire",
+      "player_id": null,
+      "player_name": null,
+      "player_url": null,
+      "hero": "Drow Ranger",
+      "hero_slug": "drow-ranger",
+      "role": null,
+      "role_icon": null,
+      "lane": null,
+      "lane_icon": null
+    }
+  ],
+  "label": {
+    "winner_side": "radiant",
+    "winner_team": "Radiant Victory"
+  }
+}

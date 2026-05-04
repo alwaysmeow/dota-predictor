@@ -1,0 +1,141 @@
+{
+  "match_id": 8786827560,
+  "source_url": "https://www.dotabuff.com/matches/8786827560",
+  "is_professional_match": true,
+  "teams": {
+    "radiant": {
+      "name": "Team Falcons",
+      "url": "https://www.dotabuff.com/esports/teams/9247354-team-falcons"
+    },
+    "dire": {
+      "name": "Aurora Gaming",
+      "url": "https://www.dotabuff.com/esports/teams/9467224-aurora-gaming"
+    }
+  },
+  "players": [
+    {
+      "side": "radiant",
+      "player_id": 10366616,
+      "player_name": "FLCN.Sneyking",
+      "player_url": "https://www.dotabuff.com/esports/players/10366616-flcn-sneyking",
+      "hero": "Silencer",
+      "hero_slug": "silencer",
+      "role": "support",
+      "role_icon": "fa-role-support",
+      "lane": "safelane",
+      "lane_icon": "fa-lane-safelane"
+    },
+    {
+      "side": "radiant",
+      "player_id": 100058342,
+      "player_name": "FLCN.skiter",
+      "player_url": "https://www.dotabuff.com/esports/players/100058342-flcn-skiter",
+      "hero": "Wraith King",
+      "hero_slug": "wraith-king",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "safelane",
+      "lane_icon": "fa-lane-safelane"
+    },
+    {
+      "side": "radiant",
+      "player_id": 898455820,
+      "player_name": "FLCN.Malr1ne",
+      "player_url": "https://www.dotabuff.com/esports/players/898455820-flcn-malr1ne",
+      "hero": "Pangolier",
+      "hero_slug": "pangolier",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "midlane",
+      "lane_icon": "fa-lane-midlane"
+    },
+    {
+      "side": "radiant",
+      "player_id": 183719386,
+      "player_name": "FLCN.AMMAR_THE_F",
+      "player_url": "https://www.dotabuff.com/esports/players/183719386-flcn-ammar_the_f",
+      "hero": "Bristleback",
+      "hero_slug": "bristleback",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "offlane",
+      "lane_icon": "fa-lane-offlane"
+    },
+    {
+      "side": "radiant",
+      "player_id": 25907144,
+      "player_name": "FLCN.Cr1t-",
+      "player_url": "https://www.dotabuff.com/esports/players/25907144-flcn-cr1t",
+      "hero": "Batrider",
+      "hero_slug": "batrider",
+      "role": "support",
+      "role_icon": "fa-role-support",
+      "lane": "offlane",
+      "lane_icon": "fa-lane-offlane"
+    },
+    {
+      "side": "dire",
+      "player_id": 124801257,
+      "player_name": "Aurora.Nightfall",
+      "player_url": "https://www.dotabuff.com/esports/players/124801257-aurora-nightfall",
+      "hero": "Lone Druid",
+      "hero_slug": "lone-druid",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "safelane",
+      "lane_icon": "fa-lane-safelane"
+    },
+    {
+      "side": "dire",
+      "player_id": 301750126,
+      "player_name": "Aurora.Mikoto",
+      "player_url": "https://www.dotabuff.com/esports/players/301750126-aurora-mikoto",
+      "hero": "Storm Spirit",
+      "hero_slug": "storm-spirit",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "midlane",
+      "lane_icon": "fa-lane-midlane"
+    },
+    {
+      "side": "dire",
+      "player_id": 126842529,
+      "player_name": "Aurora.Ws`",
+      "player_url": "https://www.dotabuff.com/esports/players/126842529-aurora-ws",
+      "hero": "Largo",
+      "hero_slug": "largo",
+      "role": "core",
+      "role_icon": "fa-role-core",
+      "lane": "offlane",
+      "lane_icon": "fa-lane-offlane"
+    },
+    {
+      "side": "dire",
+      "player_id": 256156323,
+      "player_name": "Aurora.Mira",
+      "player_url": "https://www.dotabuff.com/esports/players/256156323-aurora-mira",
+      "hero": "Lion",
+      "hero_slug": "lion",
+      "role": "support",
+      "role_icon": "fa-role-support",
+      "lane": "offlane",
+      "lane_icon": "fa-lane-offlane"
+    },
+    {
+      "side": "dire",
+      "player_id": 320219866,
+      "player_name": "Aurora.kaori",
+      "player_url": "https://www.dotabuff.com/esports/players/320219866-aurora-kaori",
+      "hero": "Warlock",
+      "hero_slug": "warlock",
+      "role": "support",
+      "role_icon": "fa-role-support",
+      "lane": "safelane",
+      "lane_icon": "fa-lane-safelane"
+    }
+  ],
+  "label": {
+    "winner_side": "dire",
+    "winner_team": "Aurora Gaming"
+  }
+}
