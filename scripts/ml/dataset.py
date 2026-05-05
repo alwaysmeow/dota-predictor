@@ -15,13 +15,18 @@ from scripts.db.postgres_common import load_parser_env, make_target_conninfo, re
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HEROES_PATH = REPO_ROOT / "dotaconstants" / "build" / "heroes.json"
+HERO_ALIASES = {
+    "outworlddestroyer": "outworlddevourer",
+    "beastmode": "beastmaster",
+    "ferocity": "primalbeast",
+}
 
 MATCH_DRAFT_QUERY = """
     SELECT
         m.match_id,
         m.winner_side,
         p.side,
-        p.hero,
+        p.hero_slug AS hero,
         p.player_slot
     FROM dotabuff_matches m
     LEFT JOIN dotabuff_match_players p ON p.match_id = m.match_id
@@ -38,7 +43,7 @@ MATCH_DRAFTS_QUERY = """
         WHERE
             m.winner_side IN ('radiant', 'dire')
             AND p.side IN ('radiant', 'dire')
-            AND p.hero IS NOT NULL
+            AND p.hero_slug IS NOT NULL
         GROUP BY m.match_id
         HAVING
             COUNT(*) = 10
@@ -52,7 +57,7 @@ MATCH_DRAFTS_QUERY = """
         m.match_id,
         m.winner_side,
         p.side,
-        p.hero,
+        p.hero_slug AS hero,
         p.player_slot
     FROM selected_matches sm
     JOIN dotabuff_matches m ON m.match_id = sm.match_id
@@ -77,13 +82,20 @@ class NormalizedMatchDraft:
     winner_side: int | None
 
 
+@dataclass(frozen=True)
+class HeroMappings:
+    exact: dict[str, int]
+    localized_prefixes: tuple[tuple[str, int], ...]
+
+
 def normalize_hero_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", name.lower())
 
 
-def load_hero_id_map(path: Path = HEROES_PATH) -> dict[str, int]:
+def load_hero_mappings(path: Path = HEROES_PATH) -> HeroMappings:
     heroes = json.loads(path.read_text(encoding="utf-8"))
-    hero_id_map: dict[str, int] = {}
+    exact: dict[str, int] = {}
+    localized_prefixes: list[tuple[str, int]] = []
 
     for hero in heroes.values():
         hero_id = int(hero["id"])
@@ -91,12 +103,19 @@ def load_hero_id_map(path: Path = HEROES_PATH) -> dict[str, int]:
         internal_name = hero.get("name")
 
         if localized_name:
-            hero_id_map[normalize_hero_name(localized_name)] = hero_id
+            normalized_localized_name = normalize_hero_name(localized_name)
+            exact[normalized_localized_name] = hero_id
+            localized_prefixes.append((normalized_localized_name, hero_id))
         if internal_name:
             short_name = internal_name.removeprefix("npc_dota_hero_")
-            hero_id_map[normalize_hero_name(short_name)] = hero_id
+            exact[normalize_hero_name(short_name)] = hero_id
 
-    return hero_id_map
+    localized_prefixes.sort(key=lambda item: len(item[0]), reverse=True)
+    return HeroMappings(exact=exact, localized_prefixes=tuple(localized_prefixes))
+
+
+def load_hero_id_map(path: Path = HEROES_PATH) -> dict[str, int]:
+    return load_hero_mappings(path).exact
 
 
 def winner_side_to_label(winner_side: str | None) -> int | None:
@@ -174,7 +193,7 @@ class DatasetMaker:
             row_factory=dict_row,
             autocommit=True,
         )
-        self._hero_id_map = load_hero_id_map(heroes_path)
+        self._hero_mappings = load_hero_mappings(heroes_path)
 
     def close(self) -> None:
         self._conn.close()
@@ -229,18 +248,14 @@ class DatasetMaker:
 
     def hero_name_to_id(self, hero_name: str) -> int:
         key = normalize_hero_name(hero_name)
+        key = HERO_ALIASES.get(key, key)
         try:
-            return self._hero_id_map[key]
-        except KeyError as exc:
-            raise KeyError(f"Unknown hero name: {hero_name!r}") from exc
+            return self._hero_mappings.exact[key]
+        except KeyError:
+            pass
 
+        for hero_prefix, hero_id in self._hero_mappings.localized_prefixes:
+            if key.startswith(hero_prefix):
+                return hero_id
 
-def fetch_match_draft(
-    match_id: int,
-    *,
-    database: str | None = None,
-    env_file: str | None = ".env",
-) -> MatchDraft:
-    """Fetch hero drafts and winner side for one match from Postgres."""
-    with DatasetMaker(database=database, env_file=env_file) as dataset:
-        return dataset.fetch_match_draft(match_id)
+        raise KeyError(f"Unknown hero name: {hero_name!r}")
