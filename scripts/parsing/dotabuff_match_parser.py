@@ -209,6 +209,18 @@ def parse_prematch_teams(soup: BeautifulSoup) -> dict[str, dict[str, Any]]:
     return teams
 
 
+def parse_played_at(soup: BeautifulSoup) -> dict[str, str | None] | None:
+    metadata = parse_header_metadata(soup)
+    match_ended = metadata.get("match_ended")
+    if not isinstance(match_ended, dict):
+        return None
+    return {
+        "text": match_ended.get("text"),
+        "datetime": match_ended.get("datetime"),
+        "title": match_ended.get("title"),
+    }
+
+
 def parse_is_professional_match(soup: BeautifulSoup) -> bool:
     selectors = (
         ".header-content-secondary a[href^='/esports/']",
@@ -529,6 +541,7 @@ def parse_match(html: str, match_id: int | None = None, source_url: str | None =
         "match_id": match_id,
         "source_url": source_url or (DOTABUFF_MATCH_URL.format(match_id=match_id) if match_id else None),
         "is_professional_match": parse_is_professional_match(soup),
+        "played_at": parse_played_at(soup),
         "teams": parse_prematch_teams(soup),
         "players": parse_prematch_players(soup),
         "label": parse_label(soup),

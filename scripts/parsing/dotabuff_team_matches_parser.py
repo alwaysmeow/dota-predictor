@@ -51,6 +51,10 @@ from scripts.parsing.dotabuff_common import (
 DOTABUFF_TEAM_MATCHES_URL = "https://www.dotabuff.com/esports/teams/{team}/matches"
 
 
+class TeamMatchesTableNotFoundError(ValueError):
+    """Raised when a Dotabuff team matches page has no matches table."""
+
+
 @dataclass
 class DotabuffTeamRef:
     team_id: int | None
@@ -302,7 +306,7 @@ def parse_team_matches(html: str, source_url: str | None = None) -> dict[str, An
     soup = BeautifulSoup(html, "html.parser")
     table = soup.select_one("table.recent-esports-matches")
     if not table:
-        raise ValueError("Could not find the Recent Esports Matches table.")
+        raise TeamMatchesTableNotFoundError("Could not find the Recent Esports Matches table.")
 
     team = parse_header_team(soup, source_url=source_url)
     matches = []

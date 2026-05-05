@@ -28,7 +28,11 @@ if __package__ in {None, ""}:
 from scripts.db.load_dotabuff_matches_from_team_matches import MatchCandidate, parse_and_upsert_match
 from scripts.db.load_dotabuff_team_matches import upsert_team_matches
 from scripts.db.postgres_common import ensure_schema, load_parser_env, make_target_conninfo, require_psycopg
-from scripts.parsing.dotabuff_team_matches_parser import fetch_team_matches_html, parse_team_matches
+from scripts.parsing.dotabuff_team_matches_parser import (
+    TeamMatchesTableNotFoundError,
+    fetch_team_matches_html,
+    parse_team_matches,
+)
 
 
 LOGGER = logging.getLogger("dotabuff_ingest")
@@ -198,6 +202,14 @@ def index_team_match_pages(args: argparse.Namespace, teams: list[TeamCandidate])
                 )
                 parsed = parse_team_matches(html, source_url=source_url)
                 count = upsert_team_matches(parsed, init_schema=False, database=args.database)
+            except TeamMatchesTableNotFoundError as exc:
+                LOGGER.info(
+                    "team page has no matches table; stopping team pagination team_id=%s page=%s: %s",
+                    team.team_id,
+                    page,
+                    exc,
+                )
+                break
             except SystemExit as exc:
                 failed_pages += 1
                 LOGGER.warning("failed team page team_id=%s page=%s: %s", team.team_id, page, exc)

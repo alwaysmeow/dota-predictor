@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS dotabuff_matches (
     match_id BIGINT PRIMARY KEY,
     source_url TEXT,
     is_professional_match BOOLEAN,
+    played_at TIMESTAMPTZ,
     radiant_team_id BIGINT,
     radiant_team_name TEXT,
     radiant_team_url TEXT,
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS dotabuff_matches (
 
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_winner_side ON dotabuff_matches (winner_side);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_is_professional ON dotabuff_matches (is_professional_match);
+CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_played_at ON dotabuff_matches (played_at);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_radiant_team_id ON dotabuff_matches (radiant_team_id);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_dire_team_id ON dotabuff_matches (dire_team_id);
 

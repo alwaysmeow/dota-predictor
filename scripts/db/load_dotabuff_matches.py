@@ -14,6 +14,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ INSERT INTO dotabuff_matches (
     match_id,
     source_url,
     is_professional_match,
+    played_at,
     radiant_team_id,
     radiant_team_name,
     radiant_team_url,
@@ -42,6 +44,7 @@ INSERT INTO dotabuff_matches (
     %(match_id)s,
     %(source_url)s,
     %(is_professional_match)s,
+    %(played_at)s,
     %(radiant_team_id)s,
     %(radiant_team_name)s,
     %(radiant_team_url)s,
@@ -56,6 +59,7 @@ INSERT INTO dotabuff_matches (
 ON CONFLICT (match_id) DO UPDATE SET
     source_url = EXCLUDED.source_url,
     is_professional_match = EXCLUDED.is_professional_match,
+    played_at = EXCLUDED.played_at,
     radiant_team_id = EXCLUDED.radiant_team_id,
     radiant_team_name = EXCLUDED.radiant_team_name,
     radiant_team_url = EXCLUDED.radiant_team_url,
@@ -117,16 +121,24 @@ def require_match_id(parsed: dict[str, Any]) -> int:
     return int(match_id)
 
 
+def parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def match_to_row(parsed: dict[str, Any]) -> dict[str, Any]:
     match_id = require_match_id(parsed)
     teams = parsed.get("teams") or {}
     radiant = teams.get("radiant") or {}
     dire = teams.get("dire") or {}
     label = parsed.get("label") or {}
+    played_at = parsed.get("played_at") or {}
     return {
         "match_id": match_id,
         "source_url": parsed.get("source_url"),
         "is_professional_match": parsed.get("is_professional_match"),
+        "played_at": parse_datetime(played_at.get("datetime")),
         "radiant_team_id": parse_team_id(radiant.get("url")),
         "radiant_team_name": radiant.get("name"),
         "radiant_team_url": radiant.get("url"),
