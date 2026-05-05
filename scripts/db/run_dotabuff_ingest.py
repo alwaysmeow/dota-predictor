@@ -7,6 +7,7 @@ Usage:
     python3 scripts/db/run_dotabuff_ingest.py --init
     python3 scripts/db/run_dotabuff_ingest.py --once --team-limit 10 --match-limit 20
     python3 scripts/db/run_dotabuff_ingest.py --team-id 9247354 --pages-per-team 2
+    python3 scripts/db/run_dotabuff_ingest.py --team-id 9247354 --page-offset 5 --pages-per-team 5
 """
 
 from __future__ import annotations
@@ -182,8 +183,10 @@ def index_team_match_pages(args: argparse.Namespace, teams: list[TeamCandidate])
             team.known_matches,
             team.last_indexed_at,
         )
-        for page in range(1, args.pages_per_team + 1):
-            if team_index > 1 or page > 1:
+        start_page = args.page_offset + 1
+        end_page = args.page_offset + args.pages_per_team
+        for page in range(start_page, end_page + 1):
+            if team_index > 1 or page > start_page:
                 sleep_between_requests(args, "next team match page")
 
             try:
@@ -298,6 +301,13 @@ def non_negative_float(value: str) -> float:
     return parsed
 
 
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Continuously load Dotabuff team match indexes and match details.")
     parser.add_argument("--database", help="Target database name. Defaults to POSTGRES_DB or DATABASE_URL dbname.")
@@ -305,6 +315,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--team-id", action="append", help="Only ingest these team ids. Can be repeated or comma-separated.")
     parser.add_argument("--team-limit", type=int, default=25, help="Teams to scan per cycle. Use 0 for all selected --team-id values.")
     parser.add_argument("--pages-per-team", type=positive_int, default=1, help="Team match pages to scan for each team per cycle.")
+    parser.add_argument("--page-offset", type=non_negative_int, default=0, help="Skip this many team match pages before scanning. For example, 5 starts from page 6.")
     parser.add_argument("--match-limit", type=positive_int, default=25, help="Missing detailed matches to load per cycle.")
     parser.add_argument("--request-sleep", type=non_negative_float, default=15.0, help="Base seconds between Dotabuff requests.")
     parser.add_argument("--request-jitter", type=non_negative_float, default=5.0, help="Extra random seconds added to request sleeps.")
@@ -337,9 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     load_parser_env(args.env_file)
     LOGGER.info("starting Dotabuff ingest; loaded environment from %s", args.env_file)
     LOGGER.info(
-        "settings: team_limit=%s pages_per_team=%s match_limit=%s request_sleep=%.1fs jitter=%.1fs cycle_sleep=%.1fs",
+        "settings: team_limit=%s pages_per_team=%s page_offset=%s match_limit=%s request_sleep=%.1fs jitter=%.1fs cycle_sleep=%.1fs",
         args.team_limit,
         args.pages_per_team,
+        args.page_offset,
         args.match_limit,
         args.request_sleep,
         args.request_jitter,
