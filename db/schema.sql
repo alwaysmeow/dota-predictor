@@ -66,11 +66,7 @@ CREATE TABLE IF NOT EXISTS dotabuff_hero_matches (
     hero_slug TEXT NOT NULL,
     match_id BIGINT NOT NULL,
     source_url TEXT,
-    page INTEGER,
     winner_side TEXT,
-    played_at TIMESTAMPTZ,
-    played_at_text TEXT,
-    played_at_title TEXT,
     duration_seconds INTEGER,
     duration TEXT,
     raw JSONB,
@@ -81,7 +77,6 @@ CREATE TABLE IF NOT EXISTS dotabuff_hero_matches (
 
 CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_match_id ON dotabuff_hero_matches (match_id);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_hero_slug ON dotabuff_hero_matches (hero_slug);
-CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_played_at ON dotabuff_hero_matches (played_at);
 
 CREATE TABLE IF NOT EXISTS dotabuff_matches (
     match_id BIGINT PRIMARY KEY,

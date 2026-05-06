@@ -33,7 +33,6 @@ from scripts.parsing.dotabuff_common import (
     build_request_headers,
     dotabuff_http_error_message,
     load_env_file,
-    parse_int,
     tag_text,
 )
 
@@ -46,21 +45,13 @@ class HeroMatchesTableNotFoundError(ValueError):
     """Raised when a Dotabuff hero matches page has no recent matches table."""
 
 
-def build_hero_matches_url(hero_or_url: str, lobby_type: str = DEFAULT_LOBBY_TYPE, page: int | None = None) -> str:
+def build_hero_matches_url(hero_or_url: str, lobby_type: str = DEFAULT_LOBBY_TYPE) -> str:
     if hero_or_url.startswith(("http://", "https://")):
-        url = hero_or_url
+        return hero_or_url
     else:
         hero = hero_or_url.strip().strip("/").removeprefix("heroes/")
         query = {"hero": [hero], "lobby_type": [lobby_type]}
-        url = urlunparse(urlparse(DOTABUFF_HERO_MATCHES_URL)._replace(query=urlencode(query, doseq=True)))
-
-    if page is None:
-        return url
-
-    parsed = urlparse(url)
-    query = parse_qs(parsed.query, keep_blank_values=True)
-    query["page"] = [str(page)]
-    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+        return urlunparse(urlparse(DOTABUFF_HERO_MATCHES_URL)._replace(query=urlencode(query, doseq=True)))
 
 
 def parse_match_id(path: str | None) -> int | None:
@@ -107,17 +98,6 @@ def parse_winner_side(result_link: Tag | None) -> str | None:
     return None
 
 
-def parse_played_at(cell: Tag | None) -> dict[str, str | None] | None:
-    time_tag = cell.select_one("time") if cell else None
-    if not time_tag:
-        return None
-    return {
-        "text": tag_text(time_tag),
-        "datetime": time_tag.get("datetime"),
-        "title": time_tag.get("title"),
-    }
-
-
 def parse_match_row(row: Tag) -> dict[str, Any] | None:
     cells = row.find_all("td", recursive=False)
     if len(cells) < 4:
@@ -132,25 +112,8 @@ def parse_match_row(row: Tag) -> dict[str, Any] | None:
     return {
         "match_id": parse_match_id(match_link.get("href")),
         "winner_side": parse_winner_side(result_link),
-        "played_at": parse_played_at(cells[0]),
         "duration_seconds": parse_duration_seconds(duration),
         "duration": duration,
-    }
-
-
-def parse_pagination(soup: BeautifulSoup) -> dict[str, Any]:
-    current_page = parse_int(tag_text(soup.select_one("nav.pagination .page.current")))
-    next_link = soup.select_one("nav.pagination .next a[href]")
-    last_link = soup.select_one("nav.pagination .last a[href]")
-    last_page = None
-    if last_link:
-        values = parse_qs(urlparse(last_link.get("href", "")).query).get("page")
-        last_page = parse_int(values[0]) if values else None
-    return {
-        "current_page": current_page,
-        "last_page": last_page,
-        "next_url": next_link.get("href") if next_link else None,
-        "last_url": last_link.get("href") if last_link else None,
     }
 
 
@@ -169,7 +132,6 @@ def parse_hero_matches(html: str, source_url: str | None = None) -> dict[str, An
     return {
         "source_url": source_url,
         "hero_slug": parse_hero_slug(source_url, soup),
-        "pagination": parse_pagination(soup),
         "matches": matches,
     }
 
@@ -179,9 +141,8 @@ def fetch_hero_matches_html(
     timeout: int,
     insecure: bool = False,
     lobby_type: str = DEFAULT_LOBBY_TYPE,
-    page: int | None = None,
 ) -> tuple[str, str]:
-    url = build_hero_matches_url(hero_or_url, lobby_type=lobby_type, page=page)
+    url = build_hero_matches_url(hero_or_url, lobby_type=lobby_type)
     request = Request(url, headers=build_request_headers())
     context = ssl._create_unverified_context() if insecure else None
     try:
@@ -199,7 +160,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("hero", nargs="?", default="abaddon", help="Dotabuff hero slug or full hero matches URL.")
     parser.add_argument("--hero", dest="hero_option", help="Same as the positional hero argument.")
     parser.add_argument("--lobby-type", default=DEFAULT_LOBBY_TYPE, help="Dotabuff lobby_type query value.")
-    parser.add_argument("--page", type=int, help="Page number to fetch.")
     parser.add_argument("--html-file", help="Read already downloaded Dotabuff HTML from a file.")
     parser.add_argument("--env-file", default=".env", help="Load request header variables from this env file.")
     parser.add_argument("--timeout", type=int, default=20, help="Network timeout in seconds.")
@@ -214,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
 
     load_env_file(args.env_file)
     hero = args.hero_option or args.hero
-    source_url = build_hero_matches_url(hero, lobby_type=args.lobby_type, page=args.page)
+    source_url = build_hero_matches_url(hero, lobby_type=args.lobby_type)
     if args.html_file:
         with open(args.html_file, "r", encoding="utf-8") as file_obj:
             html = file_obj.read()
@@ -224,7 +184,6 @@ def main(argv: list[str] | None = None) -> int:
             args.timeout,
             args.insecure,
             lobby_type=args.lobby_type,
-            page=args.page,
         )
 
     parsed = parse_hero_matches(html, source_url=source_url)
