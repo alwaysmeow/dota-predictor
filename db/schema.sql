@@ -62,6 +62,27 @@ CREATE INDEX IF NOT EXISTS idx_dotabuff_team_matches_played_at ON dotabuff_team_
 CREATE INDEX IF NOT EXISTS idx_dotabuff_team_matches_opponent_team_id ON dotabuff_team_matches (opponent_team_id);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_team_matches_league_id ON dotabuff_team_matches (league_id);
 
+CREATE TABLE IF NOT EXISTS dotabuff_hero_matches (
+    hero_slug TEXT NOT NULL,
+    match_id BIGINT NOT NULL,
+    source_url TEXT,
+    page INTEGER,
+    winner_side TEXT,
+    played_at TIMESTAMPTZ,
+    played_at_text TEXT,
+    played_at_title TEXT,
+    duration_seconds INTEGER,
+    duration TEXT,
+    raw JSONB,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (hero_slug, match_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_match_id ON dotabuff_hero_matches (match_id);
+CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_hero_slug ON dotabuff_hero_matches (hero_slug);
+CREATE INDEX IF NOT EXISTS idx_dotabuff_hero_matches_played_at ON dotabuff_hero_matches (played_at);
+
 CREATE TABLE IF NOT EXISTS dotabuff_matches (
     match_id BIGINT PRIMARY KEY,
     source_url TEXT,
@@ -110,10 +131,12 @@ CREATE INDEX IF NOT EXISTS idx_dotabuff_match_players_side ON dotabuff_match_pla
 
 ALTER TABLE dotabuff_teams ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_team_matches ALTER COLUMN raw DROP NOT NULL;
+ALTER TABLE dotabuff_hero_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_match_players ALTER COLUMN raw DROP NOT NULL;
 
 UPDATE dotabuff_teams SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_team_matches SET raw = NULL WHERE raw IS NOT NULL;
+UPDATE dotabuff_hero_matches SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_matches SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_match_players SET raw = NULL WHERE raw IS NOT NULL;
