@@ -151,14 +151,19 @@ def match_to_row(parsed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def player_to_row(match_id: int, player: dict[str, Any], player_slot: int) -> dict[str, Any]:
+def player_to_row(
+    match_id: int,
+    player: dict[str, Any],
+    player_slot: int,
+    anonymize_player: bool = False,
+) -> dict[str, Any]:
     return {
         "match_id": match_id,
         "player_slot": player_slot,
         "side": player.get("side"),
-        "player_id": player.get("player_id"),
-        "player_name": player.get("player_name"),
-        "player_url": player.get("player_url"),
+        "player_id": None if anonymize_player else player.get("player_id"),
+        "player_name": None if anonymize_player else player.get("player_name"),
+        "player_url": None if anonymize_player else player.get("player_url"),
         "hero": player.get("hero"),
         "hero_slug": player.get("hero_slug"),
         "role": player.get("role"),
@@ -193,6 +198,7 @@ def upsert_match(parsed: dict[str, Any], init_schema: bool = False, database: st
     psycopg, _, _, _, _ = require_psycopg()
     match_id = require_match_id(parsed)
     players = parsed.get("players") or []
+    anonymize_players = parsed.get("is_professional_match") is False
 
     with psycopg.connect(make_target_conninfo(database=database)) as conn:
         if init_schema:
@@ -201,7 +207,10 @@ def upsert_match(parsed: dict[str, Any], init_schema: bool = False, database: st
             cur.execute(UPSERT_MATCH_SQL, match_to_row(parsed))
             cur.execute(DELETE_PLAYERS_SQL, (match_id,))
             for player_slot, player in enumerate(players):
-                cur.execute(INSERT_PLAYER_SQL, player_to_row(match_id, player, player_slot))
+                cur.execute(
+                    INSERT_PLAYER_SQL,
+                    player_to_row(match_id, player, player_slot, anonymize_player=anonymize_players),
+                )
         conn.commit()
     return len(players)
 
