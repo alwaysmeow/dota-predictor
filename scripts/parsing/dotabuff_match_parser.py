@@ -46,6 +46,7 @@ from scripts.parsing.dotabuff_common import (
     first_class_match,
     load_env_file,
     parse_int,
+    read_text_response,
     tag_text,
 )
 
@@ -94,12 +95,11 @@ def fetch_match_html(match_id_or_url: str, timeout: int, insecure: bool = False)
         match = re.search(r"/matches/(\d+)", url)
         match_id = int(match.group(1)) if match else None
 
-    request = Request(url, headers=build_request_headers())
+    request = Request(url, headers=build_request_headers(url))
     context = ssl._create_unverified_context() if insecure else None
     try:
         with urlopen(request, timeout=timeout, context=context) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            return response.read().decode(charset, errors="replace"), url, match_id
+            return read_text_response(response), url, match_id
     except HTTPError as exc:
         raise SystemExit(dotabuff_http_error_message(exc, url)) from exc
     except URLError as exc:

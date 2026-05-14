@@ -44,6 +44,7 @@ from scripts.parsing.dotabuff_common import (
     dotabuff_http_error_message,
     load_env_file,
     parse_int,
+    read_text_response,
     tag_text,
 )
 
@@ -325,12 +326,11 @@ def parse_team_matches(html: str, source_url: str | None = None) -> dict[str, An
 
 def fetch_team_matches_html(team_or_url: str, timeout: int, insecure: bool = False, page: int | None = None) -> tuple[str, str]:
     url = build_team_matches_url(team_or_url, page=page)
-    request = Request(url, headers=build_request_headers())
+    request = Request(url, headers=build_request_headers(url))
     context = ssl._create_unverified_context() if insecure else None
     try:
         with urlopen(request, timeout=timeout, context=context) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            return response.read().decode(charset, errors="replace"), url
+            return read_text_response(response), url
     except HTTPError as exc:
         raise SystemExit(dotabuff_http_error_message(exc, url)) from exc
     except URLError as exc:
