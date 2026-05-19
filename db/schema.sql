@@ -124,11 +124,38 @@ CREATE INDEX IF NOT EXISTS idx_dotabuff_match_players_player_id ON dotabuff_matc
 CREATE INDEX IF NOT EXISTS idx_dotabuff_match_players_hero_slug ON dotabuff_match_players (hero_slug);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_match_players_side ON dotabuff_match_players (side);
 
+CREATE TABLE IF NOT EXISTS synthetic_outdraft_matches (
+    synthetic_match_id BIGSERIAL PRIMARY KEY,
+    fingerprint TEXT NOT NULL UNIQUE,
+    generator_version TEXT NOT NULL,
+    seed INTEGER,
+    scenario TEXT NOT NULL,
+    radiant_hero_slugs TEXT[] NOT NULL,
+    dire_hero_slugs TEXT[] NOT NULL,
+    winner_side TEXT NOT NULL CHECK (winner_side IN ('radiant', 'dire')),
+    radiant_score NUMERIC(8, 3) NOT NULL,
+    dire_score NUMERIC(8, 3) NOT NULL,
+    outdraft_gap NUMERIC(8, 3) NOT NULL,
+    confidence NUMERIC(5, 4) NOT NULL,
+    raw JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (array_length(radiant_hero_slugs, 1) = 5),
+    CHECK (array_length(dire_hero_slugs, 1) = 5)
+);
+
+CREATE INDEX IF NOT EXISTS idx_synthetic_outdraft_matches_winner_side
+    ON synthetic_outdraft_matches (winner_side);
+CREATE INDEX IF NOT EXISTS idx_synthetic_outdraft_matches_scenario
+    ON synthetic_outdraft_matches (scenario);
+CREATE INDEX IF NOT EXISTS idx_synthetic_outdraft_matches_outdraft_gap
+    ON synthetic_outdraft_matches (outdraft_gap);
+
 ALTER TABLE dotabuff_teams ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_team_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_hero_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_match_players ALTER COLUMN raw DROP NOT NULL;
+ALTER TABLE synthetic_outdraft_matches ALTER COLUMN raw DROP NOT NULL;
 
 UPDATE dotabuff_teams SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_team_matches SET raw = NULL WHERE raw IS NOT NULL;

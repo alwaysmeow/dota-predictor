@@ -65,6 +65,18 @@ MATCH_DRAFTS_QUERY = """
     ORDER BY m.match_id DESC, p.player_slot ASC
 """
 
+SYNTHETIC_MATCH_DRAFTS_QUERY = """
+    SELECT
+        synthetic_match_id AS match_id,
+        winner_side,
+        radiant_hero_slugs,
+        dire_hero_slugs
+    FROM synthetic_outdraft_matches
+    ORDER BY synthetic_match_id DESC
+    LIMIT %(limit)s
+    OFFSET %(offset)s
+"""
+
 
 @dataclass(frozen=True)
 class MatchDraft:
@@ -174,6 +186,30 @@ def rows_to_match_drafts(rows: list[dict]) -> list[MatchDraft]:
     return drafts
 
 
+def rows_to_synthetic_match_drafts(rows: list[dict]) -> list[MatchDraft]:
+    return [
+        MatchDraft(
+            match_id=int(row["match_id"]),
+            radiant_heroes=list(row["radiant_hero_slugs"]),
+            dire_heroes=list(row["dire_hero_slugs"]),
+            winner_side=row["winner_side"],
+        )
+        for row in rows
+    ]
+
+
+def validate_limit(limit: int, *, name: str = "limit", allow_zero: bool = False) -> None:
+    if allow_zero and limit == 0:
+        return
+    if limit < 1:
+        raise ValueError(f"{name} must be positive, got {limit}")
+
+
+def validate_offset(offset: int, *, name: str = "offset") -> None:
+    if offset < 0:
+        raise ValueError(f"{name} must be non-negative, got {offset}")
+
+
 class DatasetMaker:
     """Reusable Postgres connection for ML dataset queries."""
 
@@ -218,16 +254,46 @@ class DatasetMaker:
         Matches are returned in descending ``match_id`` order. ``offset`` can be
         used for simple pagination.
         """
-        if limit < 1:
-            raise ValueError(f"limit must be positive, got {limit}")
-        if offset < 0:
-            raise ValueError(f"offset must be non-negative, got {offset}")
+        validate_limit(limit)
+        validate_offset(offset)
 
         with self._conn.cursor() as cur:
             cur.execute(MATCH_DRAFTS_QUERY, {"limit": limit, "offset": offset})
             rows = cur.fetchall()
 
         return rows_to_match_drafts(rows)
+
+    def fetch_synthetic_match_drafts(self, limit: int, *, offset: int = 0) -> list[MatchDraft]:
+        """Fetch synthetic 5v5 outdraft rows with known winner side."""
+        validate_limit(limit)
+        validate_offset(offset)
+
+        with self._conn.cursor() as cur:
+            cur.execute(SYNTHETIC_MATCH_DRAFTS_QUERY, {"limit": limit, "offset": offset})
+            rows = cur.fetchall()
+
+        return rows_to_synthetic_match_drafts(rows)
+
+    def fetch_training_match_drafts(
+        self,
+        real_limit: int,
+        *,
+        synthetic_limit: int = 0,
+        real_offset: int = 0,
+        synthetic_offset: int = 0,
+    ) -> list[MatchDraft]:
+        """Fetch real and synthetic drafts with independent limits."""
+        validate_limit(real_limit, name="real_limit", allow_zero=True)
+        validate_limit(synthetic_limit, name="synthetic_limit", allow_zero=True)
+        validate_offset(real_offset, name="real_offset")
+        validate_offset(synthetic_offset, name="synthetic_offset")
+
+        drafts: list[MatchDraft] = []
+        if real_limit:
+            drafts.extend(self.fetch_match_drafts(real_limit, offset=real_offset))
+        if synthetic_limit:
+            drafts.extend(self.fetch_synthetic_match_drafts(synthetic_limit, offset=synthetic_offset))
+        return drafts
 
     def normalize_match_draft(self, draft: MatchDraft) -> NormalizedMatchDraft:
         """Convert hero names and winner side into numeric model inputs."""
@@ -245,6 +311,32 @@ class DatasetMaker:
     def fetch_normalized_match_drafts(self, limit: int, *, offset: int = 0) -> list[NormalizedMatchDraft]:
         """Fetch several complete match drafts and normalize them for models."""
         return [self.normalize_match_draft(draft) for draft in self.fetch_match_drafts(limit, offset=offset)]
+
+    def fetch_normalized_synthetic_match_drafts(
+        self,
+        limit: int,
+        *,
+        offset: int = 0,
+    ) -> list[NormalizedMatchDraft]:
+        """Fetch synthetic match drafts and normalize them for models."""
+        return [self.normalize_match_draft(draft) for draft in self.fetch_synthetic_match_drafts(limit, offset=offset)]
+
+    def fetch_normalized_training_match_drafts(
+        self,
+        real_limit: int,
+        *,
+        synthetic_limit: int = 0,
+        real_offset: int = 0,
+        synthetic_offset: int = 0,
+    ) -> list[NormalizedMatchDraft]:
+        """Fetch real and synthetic match drafts with independent limits, then normalize."""
+        drafts = self.fetch_training_match_drafts(
+            real_limit,
+            synthetic_limit=synthetic_limit,
+            real_offset=real_offset,
+            synthetic_offset=synthetic_offset,
+        )
+        return [self.normalize_match_draft(draft) for draft in drafts]
 
     def hero_name_to_id(self, hero_name: str) -> int:
         key = normalize_hero_name(hero_name)
