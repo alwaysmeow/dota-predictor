@@ -18,6 +18,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 import logging
+import socket
 import ssl
 import sys
 import time
@@ -96,6 +97,13 @@ def positive_int(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
     return parsed
 
 
@@ -193,13 +201,18 @@ def fetch_candidates(args: argparse.Namespace) -> list[MatchCandidate]:
     ]
 
 
-def fetch_opendota_match(match_id: int, timeout: int, insecure: bool = False) -> dict[str, Any]:
+def should_retry_http_status(code: int) -> bool:
+    return code in {408, 429, 500, 502, 503, 504}
+
+
+def fetch_opendota_match_once(match_id: int, timeout: int, insecure: bool = False) -> dict[str, Any]:
     url = OPENDOTA_MATCH_URL.format(match_id=match_id)
     request = Request(
         url,
         headers={
             "User-Agent": "dota-predictor-opendota-probe/1.0",
             "Accept": "application/json",
+            "Connection": "close",
         },
     )
 
@@ -208,13 +221,48 @@ def fetch_opendota_match(match_id: int, timeout: int, insecure: bool = False) ->
         with urlopen(request, timeout=timeout, context=context) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             return json.loads(response.read().decode(charset, errors="replace"))
-    except HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenDota returned HTTP {exc.code}: {body[:500]}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"Could not fetch OpenDota match {match_id}: {exc.reason}") from exc
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"OpenDota returned non-JSON response for match {match_id}: {exc}") from exc
+
+
+def fetch_opendota_match(
+    match_id: int,
+    timeout: int,
+    insecure: bool = False,
+    retries: int = 3,
+    retry_sleep: float = 5.0,
+    retry_backoff: float = 2.0,
+) -> dict[str, Any]:
+    attempts = retries + 1
+    delay = retry_sleep
+    last_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetch_opendota_match_once(match_id, timeout=timeout, insecure=insecure)
+        except HTTPError as exc:
+            last_error = exc
+            if not should_retry_http_status(exc.code) or attempt >= attempts:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"OpenDota returned HTTP {exc.code}: {body[:500]}") from exc
+        except (TimeoutError, socket.timeout, URLError) as exc:
+            last_error = exc
+            if attempt >= attempts:
+                reason = exc.reason if isinstance(exc, URLError) else exc
+                raise RuntimeError(f"Could not fetch OpenDota match {match_id}: {reason}") from exc
+
+        LOGGER.warning(
+            "OpenDota fetch failed match_id=%s attempt=%s/%s: %s; sleeping %.1fs before retry",
+            match_id,
+            attempt,
+            attempts,
+            last_error,
+            delay,
+        )
+        time.sleep(delay)
+        delay *= retry_backoff
+
+    raise RuntimeError(f"OpenDota fetch failed match_id={match_id}: {last_error}")
 
 
 def load_hero_names(path: Path = HEROES_PATH) -> dict[int, str]:
@@ -366,6 +414,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sleep", type=non_negative_float, default=1.0, help="Seconds to sleep between OpenDota requests.")
     parser.add_argument("--cycle-sleep", type=non_negative_float, default=300.0, help="Seconds between ingest cycles.")
     parser.add_argument("--timeout", type=positive_int, default=30, help="OpenDota request timeout in seconds.")
+    parser.add_argument("--retries", type=non_negative_int, default=3, help="Retry attempts after the first OpenDota request.")
+    parser.add_argument("--retry-sleep", type=non_negative_float, default=5.0, help="Initial seconds to sleep before retrying OpenDota.")
+    parser.add_argument("--retry-backoff", type=non_negative_float, default=2.0, help="Multiplier for retry sleep after each failed attempt.")
+    parser.add_argument("--failure-sleep", type=non_negative_float, default=30.0, help="Seconds to sleep after a match fails all retries.")
     parser.add_argument("--insecure", action="store_true", help="Skip TLS certificate verification for OpenDota fetch.")
     parser.add_argument("--env-file", default=".env", help="Load Postgres settings from this env file.")
     parser.add_argument("--database", help="Target database name. Defaults to POSTGRES_DB or DATABASE_URL dbname.")
@@ -395,7 +447,14 @@ def run_cycle(args: argparse.Namespace, cycle: int, hero_names: dict[int, str]) 
             ",".join(candidate.sources),
         )
         try:
-            payload = fetch_opendota_match(candidate.match_id, timeout=args.timeout, insecure=args.insecure)
+            payload = fetch_opendota_match(
+                candidate.match_id,
+                timeout=args.timeout,
+                insecure=args.insecure,
+                retries=args.retries,
+                retry_sleep=args.retry_sleep,
+                retry_backoff=args.retry_backoff,
+            )
             if not args.dry_run:
                 players_count = upsert_opendota_match(payload, hero_names, args)
         except Exception as exc:
@@ -403,6 +462,9 @@ def run_cycle(args: argparse.Namespace, cycle: int, hero_names: dict[int, str]) 
             LOGGER.warning("failed match %s: %s", candidate.match_id, exc)
             if not args.keep_going:
                 raise RuntimeError(f"failed match {candidate.match_id}: {exc}") from exc
+            if args.failure_sleep > 0:
+                LOGGER.info("sleeping %.1fs after failed OpenDota match", args.failure_sleep)
+                time.sleep(args.failure_sleep)
         else:
             loaded += 1
             if args.dry_run:
@@ -458,3 +520,17 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+"""
+python3 scripts/db/probe_opendota_missing_matches.py \
+  --init \
+  --limit 25 \
+  --sleep 2 \
+  --timeout 60 \
+  --retries 4 \
+  --retry-sleep 10 \
+  --retry-backoff 2 \
+  --failure-sleep 60 \
+  --cycle-sleep 300 \
+  --insecure
+"""
