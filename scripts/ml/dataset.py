@@ -65,6 +65,80 @@ MATCH_DRAFTS_QUERY = """
     ORDER BY m.match_id DESC, p.player_slot ASC
 """
 
+OPENDOTA_MATCH_DRAFT_QUERY = """
+    SELECT
+        m.match_id,
+        m.winner_side,
+        player_rows.side,
+        player_rows.hero,
+        player_rows.player_slot
+    FROM opendota_matches m
+    CROSS JOIN LATERAL (
+        SELECT
+            'radiant' AS side,
+            player->>'hero' AS hero,
+            ordinality AS player_slot
+        FROM jsonb_array_elements(m.players->'radiant') WITH ORDINALITY AS players(player, ordinality)
+        UNION ALL
+        SELECT
+            'dire' AS side,
+            player->>'hero' AS hero,
+            ordinality + 128 AS player_slot
+        FROM jsonb_array_elements(m.players->'dire') WITH ORDINALITY AS players(player, ordinality)
+    ) player_rows
+    WHERE m.match_id = %(match_id)s
+    ORDER BY player_rows.player_slot ASC
+"""
+
+OPENDOTA_MATCH_DRAFTS_QUERY = """
+    WITH selected_matches AS (
+        SELECT
+            m.match_id
+        FROM opendota_matches m
+        WHERE
+            m.winner_side IN ('radiant', 'dire')
+            AND jsonb_array_length(coalesce(m.players->'radiant', '[]'::jsonb)) = 5
+            AND jsonb_array_length(coalesce(m.players->'dire', '[]'::jsonb)) = 5
+            AND NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(
+                    coalesce(m.players->'radiant', '[]'::jsonb) || coalesce(m.players->'dire', '[]'::jsonb)
+                ) AS players(player)
+                WHERE players.player->>'hero' IS NULL
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM dotabuff_matches dm
+                WHERE dm.match_id = m.match_id
+            )
+        ORDER BY m.match_id DESC
+        LIMIT %(limit)s
+        OFFSET %(offset)s
+    )
+    SELECT
+        m.match_id,
+        m.winner_side,
+        player_rows.side,
+        player_rows.hero,
+        player_rows.player_slot
+    FROM selected_matches sm
+    JOIN opendota_matches m ON m.match_id = sm.match_id
+    CROSS JOIN LATERAL (
+        SELECT
+            'radiant' AS side,
+            player->>'hero' AS hero,
+            ordinality AS player_slot
+        FROM jsonb_array_elements(m.players->'radiant') WITH ORDINALITY AS players(player, ordinality)
+        UNION ALL
+        SELECT
+            'dire' AS side,
+            player->>'hero' AS hero,
+            ordinality + 128 AS player_slot
+        FROM jsonb_array_elements(m.players->'dire') WITH ORDINALITY AS players(player, ordinality)
+    ) player_rows
+    ORDER BY m.match_id DESC, player_rows.player_slot ASC
+"""
+
 SYNTHETIC_MATCH_DRAFTS_QUERY = """
     SELECT
         synthetic_match_id AS match_id,
@@ -198,9 +272,19 @@ def rows_to_synthetic_match_drafts(rows: list[dict]) -> list[MatchDraft]:
     ]
 
 
-def validate_limit(limit: int, *, name: str = "limit", allow_zero: bool = False) -> None:
+def validate_limit(
+    limit: int | None,
+    *,
+    name: str = "limit",
+    allow_zero: bool = False,
+    allow_none: bool = False,
+) -> None:
+    if allow_none and limit is None:
+        return
     if allow_zero and limit == 0:
         return
+    if limit is None:
+        raise ValueError(f"{name} must be set")
     if limit < 1:
         raise ValueError(f"{name} must be positive, got {limit}")
 
@@ -248,13 +332,21 @@ class DatasetMaker:
 
         return rows_to_match_draft(match_id, rows)
 
-    def fetch_match_drafts(self, limit: int, *, offset: int = 0) -> list[MatchDraft]:
+    def fetch_opendota_match_draft(self, match_id: int) -> MatchDraft:
+        """Fetch hero drafts and winner side for one OpenDota-backed match."""
+        with self._conn.cursor() as cur:
+            cur.execute(OPENDOTA_MATCH_DRAFT_QUERY, {"match_id": match_id})
+            rows = cur.fetchall()
+
+        return rows_to_match_draft(match_id, rows)
+
+    def fetch_match_drafts(self, limit: int | None, *, offset: int = 0) -> list[MatchDraft]:
         """Fetch complete 5v5 match drafts with known winner side.
 
         Matches are returned in descending ``match_id`` order. ``offset`` can be
-        used for simple pagination.
+        used for simple pagination. Pass ``limit=None`` to fetch all matches.
         """
-        validate_limit(limit)
+        validate_limit(limit, allow_none=True)
         validate_offset(offset)
 
         with self._conn.cursor() as cur:
@@ -263,9 +355,20 @@ class DatasetMaker:
 
         return rows_to_match_drafts(rows)
 
-    def fetch_synthetic_match_drafts(self, limit: int, *, offset: int = 0) -> list[MatchDraft]:
+    def fetch_opendota_match_drafts(self, limit: int | None, *, offset: int = 0) -> list[MatchDraft]:
+        """Fetch complete 5v5 OpenDota drafts missing from dotabuff_matches."""
+        validate_limit(limit, allow_none=True)
+        validate_offset(offset)
+
+        with self._conn.cursor() as cur:
+            cur.execute(OPENDOTA_MATCH_DRAFTS_QUERY, {"limit": limit, "offset": offset})
+            rows = cur.fetchall()
+
+        return rows_to_match_drafts(rows)
+
+    def fetch_synthetic_match_drafts(self, limit: int | None, *, offset: int = 0) -> list[MatchDraft]:
         """Fetch synthetic 5v5 outdraft rows with known winner side."""
-        validate_limit(limit)
+        validate_limit(limit, allow_none=True)
         validate_offset(offset)
 
         with self._conn.cursor() as cur:
@@ -276,22 +379,32 @@ class DatasetMaker:
 
     def fetch_training_match_drafts(
         self,
-        real_limit: int,
+        dotabuff_limit: int | None,
         *,
-        synthetic_limit: int = 0,
-        real_offset: int = 0,
+        opendota_limit: int | None = 0,
+        synthetic_limit: int | None = 0,
+        dotabuff_offset: int = 0,
+        opendota_offset: int = 0,
         synthetic_offset: int = 0,
     ) -> list[MatchDraft]:
-        """Fetch real and synthetic drafts with independent limits."""
-        validate_limit(real_limit, name="real_limit", allow_zero=True)
-        validate_limit(synthetic_limit, name="synthetic_limit", allow_zero=True)
-        validate_offset(real_offset, name="real_offset")
+        """Fetch Dotabuff, OpenDota, and synthetic drafts with independent limits.
+
+        Pass a source limit as ``None`` to fetch all rows for that source. Pass
+        ``0`` to skip that source.
+        """
+        validate_limit(dotabuff_limit, name="dotabuff_limit", allow_zero=True, allow_none=True)
+        validate_limit(opendota_limit, name="opendota_limit", allow_zero=True, allow_none=True)
+        validate_limit(synthetic_limit, name="synthetic_limit", allow_zero=True, allow_none=True)
+        validate_offset(dotabuff_offset, name="dotabuff_offset")
+        validate_offset(opendota_offset, name="opendota_offset")
         validate_offset(synthetic_offset, name="synthetic_offset")
 
         drafts: list[MatchDraft] = []
-        if real_limit:
-            drafts.extend(self.fetch_match_drafts(real_limit, offset=real_offset))
-        if synthetic_limit:
+        if dotabuff_limit or dotabuff_limit is None:
+            drafts.extend(self.fetch_match_drafts(dotabuff_limit, offset=dotabuff_offset))
+        if opendota_limit or opendota_limit is None:
+            drafts.extend(self.fetch_opendota_match_drafts(opendota_limit, offset=opendota_offset))
+        if synthetic_limit or synthetic_limit is None:
             drafts.extend(self.fetch_synthetic_match_drafts(synthetic_limit, offset=synthetic_offset))
         return drafts
 
@@ -308,13 +421,26 @@ class DatasetMaker:
         """Fetch one match draft and normalize heroes and winner side."""
         return self.normalize_match_draft(self.fetch_match_draft(match_id))
 
-    def fetch_normalized_match_drafts(self, limit: int, *, offset: int = 0) -> list[NormalizedMatchDraft]:
+    def fetch_normalized_opendota_match_draft(self, match_id: int) -> NormalizedMatchDraft:
+        """Fetch one OpenDota match draft and normalize heroes and winner side."""
+        return self.normalize_match_draft(self.fetch_opendota_match_draft(match_id))
+
+    def fetch_normalized_match_drafts(self, limit: int | None, *, offset: int = 0) -> list[NormalizedMatchDraft]:
         """Fetch several complete match drafts and normalize them for models."""
         return [self.normalize_match_draft(draft) for draft in self.fetch_match_drafts(limit, offset=offset)]
 
+    def fetch_normalized_opendota_match_drafts(
+        self,
+        limit: int | None,
+        *,
+        offset: int = 0,
+    ) -> list[NormalizedMatchDraft]:
+        """Fetch OpenDota match drafts and normalize them for models."""
+        return [self.normalize_match_draft(draft) for draft in self.fetch_opendota_match_drafts(limit, offset=offset)]
+
     def fetch_normalized_synthetic_match_drafts(
         self,
-        limit: int,
+        limit: int | None,
         *,
         offset: int = 0,
     ) -> list[NormalizedMatchDraft]:
@@ -323,17 +449,21 @@ class DatasetMaker:
 
     def fetch_normalized_training_match_drafts(
         self,
-        real_limit: int,
+        dotabuff_limit: int | None,
         *,
-        synthetic_limit: int = 0,
-        real_offset: int = 0,
+        opendota_limit: int | None = 0,
+        synthetic_limit: int | None = 0,
+        dotabuff_offset: int = 0,
+        opendota_offset: int = 0,
         synthetic_offset: int = 0,
     ) -> list[NormalizedMatchDraft]:
-        """Fetch real and synthetic match drafts with independent limits, then normalize."""
+        """Fetch training drafts with independent limits, then normalize."""
         drafts = self.fetch_training_match_drafts(
-            real_limit,
+            dotabuff_limit,
+            opendota_limit=opendota_limit,
             synthetic_limit=synthetic_limit,
-            real_offset=real_offset,
+            dotabuff_offset=dotabuff_offset,
+            opendota_offset=opendota_offset,
             synthetic_offset=synthetic_offset,
         )
         return [self.normalize_match_draft(draft) for draft in drafts]

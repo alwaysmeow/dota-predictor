@@ -531,6 +531,6 @@ python3 scripts/db/probe_opendota_missing_matches.py \
   --retry-sleep 10 \
   --retry-backoff 2 \
   --failure-sleep 60 \
-  --cycle-sleep 300 \
+  --cycle-sleep 30 \
   --insecure
 """
