@@ -102,6 +102,28 @@ CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_played_at ON dotabuff_matches (p
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_radiant_team_id ON dotabuff_matches (radiant_team_id);
 CREATE INDEX IF NOT EXISTS idx_dotabuff_matches_dire_team_id ON dotabuff_matches (dire_team_id);
 
+CREATE TABLE IF NOT EXISTS opendota_matches (
+    match_id BIGINT PRIMARY KEY,
+    source_url TEXT,
+    played_at TIMESTAMPTZ,
+    radiant_team_id BIGINT,
+    radiant_team_name TEXT,
+    dire_team_id BIGINT,
+    dire_team_name TEXT,
+    winner_side TEXT,
+    winner_team_id BIGINT,
+    winner_team_name TEXT,
+    players JSONB NOT NULL DEFAULT '{}'::jsonb,
+    raw JSONB,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_opendota_matches_played_at ON opendota_matches (played_at);
+CREATE INDEX IF NOT EXISTS idx_opendota_matches_winner_side ON opendota_matches (winner_side);
+CREATE INDEX IF NOT EXISTS idx_opendota_matches_radiant_team_id ON opendota_matches (radiant_team_id);
+CREATE INDEX IF NOT EXISTS idx_opendota_matches_dire_team_id ON opendota_matches (dire_team_id);
+
 CREATE TABLE IF NOT EXISTS dotabuff_match_players (
     match_id BIGINT NOT NULL REFERENCES dotabuff_matches (match_id) ON DELETE CASCADE,
     player_slot SMALLINT NOT NULL,
@@ -154,6 +176,7 @@ ALTER TABLE dotabuff_teams ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_team_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_hero_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_matches ALTER COLUMN raw DROP NOT NULL;
+ALTER TABLE opendota_matches ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE dotabuff_match_players ALTER COLUMN raw DROP NOT NULL;
 ALTER TABLE synthetic_outdraft_matches ALTER COLUMN raw DROP NOT NULL;
 
@@ -161,4 +184,5 @@ UPDATE dotabuff_teams SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_team_matches SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_hero_matches SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_matches SET raw = NULL WHERE raw IS NOT NULL;
+UPDATE opendota_matches SET raw = NULL WHERE raw IS NOT NULL;
 UPDATE dotabuff_match_players SET raw = NULL WHERE raw IS NOT NULL;
