@@ -349,3 +349,12 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+"""
+python3 scripts/db/run_dotabuff_rare_hero_ingest.py \
+  --hero-limit 999 \
+  --match-limit 1 \
+  --request-sleep 10 \
+  --request-jitter 5 \
+  --insecure
+"""

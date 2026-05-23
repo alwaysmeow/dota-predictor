@@ -25,6 +25,7 @@ MATCH_DRAFT_QUERY = """
     SELECT
         m.match_id,
         m.winner_side,
+        m.is_professional_match,
         p.side,
         p.hero_slug AS hero,
         p.player_slot
@@ -56,6 +57,7 @@ MATCH_DRAFTS_QUERY = """
     SELECT
         m.match_id,
         m.winner_side,
+        m.is_professional_match,
         p.side,
         p.hero_slug AS hero,
         p.player_slot
@@ -69,6 +71,7 @@ OPENDOTA_MATCH_DRAFT_QUERY = """
     SELECT
         m.match_id,
         m.winner_side,
+        (m.radiant_team_id IS NOT NULL) AS is_professional_match,
         player_rows.side,
         player_rows.hero,
         player_rows.player_slot
@@ -118,6 +121,7 @@ OPENDOTA_MATCH_DRAFTS_QUERY = """
     SELECT
         m.match_id,
         m.winner_side,
+        (m.radiant_team_id IS NOT NULL) AS is_professional_match,
         player_rows.side,
         player_rows.hero,
         player_rows.player_slot
@@ -143,6 +147,7 @@ SYNTHETIC_MATCH_DRAFTS_QUERY = """
     SELECT
         synthetic_match_id AS match_id,
         winner_side,
+        NULL::boolean AS is_professional_match,
         radiant_hero_slugs,
         dire_hero_slugs
     FROM synthetic_outdraft_matches
@@ -158,6 +163,7 @@ class MatchDraft:
     radiant_heroes: list[str]
     dire_heroes: list[str]
     winner_side: str | None
+    is_professional_match: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,7 @@ class NormalizedMatchDraft:
     radiant_hero_ids: list[int]
     dire_hero_ids: list[int]
     winner_side: int | None
+    is_professional_match: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -235,6 +242,7 @@ def rows_to_match_draft(match_id: int, rows: list[dict]) -> MatchDraft:
         radiant_heroes=radiant_heroes,
         dire_heroes=dire_heroes,
         winner_side=rows[0]["winner_side"],
+        is_professional_match=rows[0].get("is_professional_match"),
     )
 
 
@@ -267,6 +275,7 @@ def rows_to_synthetic_match_drafts(rows: list[dict]) -> list[MatchDraft]:
             radiant_heroes=list(row["radiant_hero_slugs"]),
             dire_heroes=list(row["dire_hero_slugs"]),
             winner_side=row["winner_side"],
+            is_professional_match=row.get("is_professional_match"),
         )
         for row in rows
     ]
@@ -415,6 +424,7 @@ class DatasetMaker:
             radiant_hero_ids=[self.hero_name_to_id(hero) for hero in draft.radiant_heroes],
             dire_hero_ids=[self.hero_name_to_id(hero) for hero in draft.dire_heroes],
             winner_side=winner_side_to_label(draft.winner_side),
+            is_professional_match=draft.is_professional_match,
         )
 
     def fetch_normalized_match_draft(self, match_id: int) -> NormalizedMatchDraft:

@@ -383,3 +383,14 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+"""
+python3 scripts/db/run_dotabuff_ingest.py \
+  --insecure \
+  --team-limit 25 \
+  --pages-per-team 1 \
+  --match-limit 1 \
+  --request-sleep 15 \
+  --request-jitter 5 \
+  --cycle-sleep 15
+"""
